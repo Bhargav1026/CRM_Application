@@ -1,0 +1,16 @@
+# root
+.DS_Store
+.env
+*.env
+
+# Node / React (frontend)
+frontend/node_modules
+frontend/.vite
+frontend/dist
+
+# Python (backend)
+backend/__pycache__/
+backend/.pytest_cache/
+backend/.venv/
+venv/
+*.pyc
