@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
+import logging
 
 from ..database import get_db
 from .. import models
@@ -8,6 +9,17 @@ from ..schemas import LeadCreate, LeadUpdate, LeadOut, LeadPagination
 from .users import get_current_user  # reuse auth dependency
 from fastapi.responses import StreamingResponse
 import io, csv
+
+
+logger = logging.getLogger(__name__)
+
+
+def _to_int(v: Optional[str]) -> Optional[int]:
+    """Convert a string query parameter to int; return None for blanks/non-digits."""
+    if v is None:
+        return None
+    s = str(v).strip()
+    return int(s) if s.isdigit() else None
 
 
 def _scoped_query(db: Session, user):
@@ -22,7 +34,7 @@ def _scoped_query(db: Session, user):
 
 
 def _display_name(u):
-    """Best-effort full name for assigned_to/owner_name; fallback to email."""
+    """Return best-effort full name for assigned_to/owner_name; fallback to email."""
     first = (getattr(u, "first_name", None) or "").strip()
     last = (getattr(u, "last_name", None) or "").strip()
     full = f"{first} {last}".strip()
@@ -38,20 +50,68 @@ def _add_owner_name(lead: models.Lead):
     return lead
 
 
+def _filter_leads_query(
+    query,
+    q: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    source: Optional[str] = None,
+    min_budget: Optional[str] = None,
+    max_budget: Optional[str] = None,
+):
+    """
+    Apply search and filter parameters to the leads query.
+    Raises HTTPException 400 for invalid filter inputs.
+    """
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            (models.Lead.first_name.ilike(like)) |
+            (models.Lead.last_name.ilike(like)) |
+            (models.Lead.email.ilike(like))
+        )
+
+    if status_filter:
+        query = query.filter(models.Lead.status == status_filter)
+
+    if source:
+        query = query.filter(models.Lead.source == source)
+
+    mb = _to_int(min_budget)
+    xb = _to_int(max_budget)
+    if min_budget is not None and mb is None and min_budget.strip() != "":
+        logger.error(f"Invalid min_budget filter input: {min_budget}")
+        raise HTTPException(status_code=400, detail="Invalid filter input for min_budget")
+    if max_budget is not None and xb is None and max_budget.strip() != "":
+        logger.error(f"Invalid max_budget filter input: {max_budget}")
+        raise HTTPException(status_code=400, detail="Invalid filter input for max_budget")
+
+    if mb is not None:
+        query = query.filter(models.Lead.budget_min != None).filter(models.Lead.budget_min >= mb)
+    if xb is not None:
+        query = query.filter(models.Lead.budget_max != None).filter(models.Lead.budget_max <= xb)
+
+    return query
+
+
 router = APIRouter(prefix="/leads", tags=["leads"])
 
 # -------- Create --------
 @router.post("", response_model=LeadOut, status_code=201)
 def create_lead(payload: LeadCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    # Attach creator as owner. If assigned_to not provided, use creator's display name.
     data = payload.dict()
     if not data.get("assigned_to"):
         data["assigned_to"] = _display_name(user)
 
     lead = models.Lead(**data, user_id=user.id)
-    db.add(lead)
-    db.commit()
-    db.refresh(lead)
+    try:
+        db.add(lead)
+        db.commit()
+        db.refresh(lead)
+        logger.info(f"Lead created with id={lead.id} by user_id={user.id}")
+    except Exception as e:
+        logger.error(f"Error creating lead: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create lead")
 
     return _add_owner_name(lead)
 
@@ -61,44 +121,30 @@ def list_leads(
     q: Optional[str] = Query(None, description="search in name/email"),
     status_filter: Optional[str] = Query(None, alias="status"),
     source: Optional[str] = Query(None, description="filter by source"),
-    min_budget: Optional[int] = Query(None, ge=0, description="filter by minimum budget"),
-    max_budget: Optional[int] = Query(None, ge=0, description="filter by maximum budget"),
+    min_budget: Optional[str] = Query(None, description="filter by minimum budget (string, blank allowed)"),
+    max_budget: Optional[str] = Query(None, description="filter by maximum budget (string, blank allowed)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100, alias="page_size"),
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    query = _scoped_query(db, user)
+    try:
+        query = _scoped_query(db, user)
+        query = _filter_leads_query(query, q, status_filter, source, min_budget, max_budget)
 
-    if q:
-        like = f"%{q}%"
-        query = query.filter(
-            (models.Lead.first_name.ilike(like)) |
-            (models.Lead.last_name.ilike(like)) |
-            (models.Lead.email.ilike(like))
+        total = query.count()
+        items = (
+            query.order_by(models.Lead.created_at.desc())
+                 .offset((page - 1) * page_size)
+                 .limit(page_size)
+                 .all()
         )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listing leads: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list leads")
 
-    if status_filter:
-        query = query.filter(models.Lead.status == status_filter)
-
-    if source:
-        query = query.filter(models.Lead.source == source)
-
-    # Budget range filters (only apply when values are provided)
-    if min_budget is not None:
-        query = query.filter(models.Lead.budget_min != None).filter(models.Lead.budget_min >= min_budget)
-    if max_budget is not None:
-        query = query.filter(models.Lead.budget_max != None).filter(models.Lead.budget_max <= max_budget)
-
-    total = query.count()
-    items = (
-        query.order_by(models.Lead.created_at.desc())
-             .offset((page - 1) * page_size)
-             .limit(page_size)
-             .all()
-    )
-
-    # enrich each with owner_name for admins (and harmless for users)
     items = [_add_owner_name(l) for l in items]
 
     return {
@@ -108,81 +154,37 @@ def list_leads(
         "size": page_size,
     }
 
-# -------- Get by id --------
-@router.get("/{lead_id}", response_model=LeadOut)
-def get_lead(lead_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    lead = _scoped_query(db, user).filter(models.Lead.id == lead_id).first()
-    if not lead:
-        raise HTTPException(404, "Lead not found")
-    return _add_owner_name(lead)
-
-# -------- Update --------
-@router.put("/{lead_id}", response_model=LeadOut)
-def update_lead(lead_id: int, payload: LeadUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    lead = _scoped_query(db, user).filter(models.Lead.id == lead_id).first()
-    if not lead:
-        raise HTTPException(404, "Lead not found")
-
-    for k, v in payload.dict(exclude_unset=True).items():
-        setattr(lead, k, v)
-
-    db.commit()
-    db.refresh(lead)
-    return _add_owner_name(lead)
-
-# -------- Soft delete --------
-@router.delete("/{lead_id}", status_code=204)
-def delete_lead(lead_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    lead = _scoped_query(db, user).filter(models.Lead.id == lead_id).first()
-    if not lead:
-        raise HTTPException(404, "Lead not found")
-    lead.is_active = False
-    db.commit()
-    return
-
 # -------- Export CSV (respects same filters) --------
+@router.get("/export")
 @router.get("/export.csv")
 def export_leads_csv(
     q: Optional[str] = Query(None, description="search in name/email"),
     status_filter: Optional[str] = Query(None, alias="status"),
     source: Optional[str] = Query(None, description="filter by source"),
-    min_budget: Optional[int] = Query(None, ge=0, description="filter by minimum budget"),
-    max_budget: Optional[int] = Query(None, ge=0, description="filter by maximum budget"),
+    min_budget: Optional[str] = Query(None, description="filter by minimum budget (string, blank allowed)"),
+    max_budget: Optional[str] = Query(None, description="filter by maximum budget (string, blank allowed)"),
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    query = _scoped_query(db, user)
+    try:
+        query = _scoped_query(db, user)
+        query = _filter_leads_query(query, q, status_filter, source, min_budget, max_budget)
 
-    if q:
-        like = f"%{q}%"
-        query = query.filter(
-            (models.Lead.first_name.ilike(like)) |
-            (models.Lead.last_name.ilike(like)) |
-            (models.Lead.email.ilike(like))
+        rows = (
+            query.order_by(models.Lead.created_at.desc())
+                 .all()
         )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting leads CSV: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to export leads")
 
-    if status_filter:
-        query = query.filter(models.Lead.status == status_filter)
-
-    if source:
-        query = query.filter(models.Lead.source == source)
-
-    if min_budget is not None:
-        query = query.filter(models.Lead.budget_min != None).filter(models.Lead.budget_min >= min_budget)
-    if max_budget is not None:
-        query = query.filter(models.Lead.budget_max != None).filter(models.Lead.budget_max <= max_budget)
-
-    rows = (
-        query.order_by(models.Lead.created_at.desc())
-             .all()
-    )
-
-    # Prepare CSV in-memory
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
         "id", "first_name", "last_name", "email", "phone", "status", "source",
-        "budget_min", "budget_max", "property_interest", "created_at", "updated_at"
+        "budget_min", "budget_max", "property_interest", "created_at", "updated_at", "owner_name"
     ])
 
     for l in rows:
@@ -199,8 +201,64 @@ def export_leads_csv(
             l.property_interest or "",
             getattr(l, "created_at", "") or "",
             getattr(l, "updated_at", "") or "",
+            _display_name(l.owner) if getattr(l, "owner", None) else ""
         ])
 
     output.seek(0)
     headers = {"Content-Disposition": "attachment; filename=leads.csv"}
+    logger.info(f"Leads CSV exported by user_id={user.id}, rows={len(rows)}")
     return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers=headers)
+
+# -------- Get by id --------
+@router.get("/{lead_id}", response_model=LeadOut)
+def get_lead(lead_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    try:
+        lead = _scoped_query(db, user).filter(models.Lead.id == lead_id).first()
+    except Exception as e:
+        logger.error(f"Error fetching lead id={lead_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch lead")
+
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return _add_owner_name(lead)
+
+# -------- Update --------
+@router.put("/{lead_id}", response_model=LeadOut)
+def update_lead(lead_id: int, payload: LeadUpdate, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    try:
+        lead = _scoped_query(db, user).filter(models.Lead.id == lead_id).first()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        for k, v in payload.dict(exclude_unset=True).items():
+            setattr(lead, k, v)
+
+        db.commit()
+        db.refresh(lead)
+        logger.info(f"Lead updated with id={lead_id} by user_id={user.id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating lead id={lead_id}: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update lead")
+
+    return _add_owner_name(lead)
+
+# -------- Soft delete --------
+@router.delete("/{lead_id}", status_code=204)
+def delete_lead(lead_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    try:
+        lead = _scoped_query(db, user).filter(models.Lead.id == lead_id).first()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+        lead.is_active = False
+        db.commit()
+        logger.info(f"Lead soft deleted with id={lead_id} by user_id={user.id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting lead id={lead_id}: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete lead")
+    return

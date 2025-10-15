@@ -202,18 +202,58 @@ export default function Leads() {
       if (source.trim()) params.source = source.trim();
       if (minBudget.trim()) params.min_budget = String(parseInt(minBudget, 10));
       if (maxBudget.trim()) params.max_budget = String(parseInt(maxBudget, 10));
-      const res = await api.get("/leads/export.csv", { params, responseType: "blob" });
-      const blob = new Blob([res.data], { type: "text/csv;charset=utf-8;" });
+
+      // Prefer /leads/export; backend should return text/csv with Content-Disposition
+      const res = await api.get("/leads/export", { params, responseType: "blob" });
+
+      // If backend sent an error as JSON/text, parse and surface it
+      const ctype = (res.headers?.["content-type"] || res.headers?.["Content-Type"] || "").toLowerCase();
+      if (!ctype.includes("text/csv")) {
+        try {
+          const text = await (res.data as Blob).text();
+          try {
+            const j = JSON.parse(text);
+            throw new Error(j?.detail || j?.message || text || "Failed to export CSV");
+          } catch {
+            throw new Error(text || "Failed to export CSV");
+          }
+        } catch {
+          throw new Error("Failed to export CSV");
+        }
+      }
+
+      const blob = new Blob([res.data], { type: "text/csv;charset=utf-8" });
       const url = window.URL.createObjectURL(blob);
+
+      // Build a friendly filename
+      const ts = new Date().toISOString().slice(0, 10);
+      const fileName = `leads_${ts}.csv`;
+
       const a = document.createElement("a");
       a.href = url;
-      a.download = "leads.csv";
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (e: any) {
-      setErr(e?.response?.data?.detail || "Failed to export CSV");
+      // If server returned a Blob error, try to extract message
+      if (e?.response?.data instanceof Blob) {
+        try {
+          const text = await e.response.data.text();
+          try {
+            const j = JSON.parse(text);
+            setErr(j?.detail || j?.message || "Failed to export CSV");
+            return;
+          } catch {
+            setErr(text || "Failed to export CSV");
+            return;
+          }
+        } catch {
+          // fallthrough
+        }
+      }
+      setErr(e?.message || e?.response?.data?.detail || "Failed to export CSV");
     }
   };
 
