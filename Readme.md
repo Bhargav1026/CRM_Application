@@ -2,6 +2,9 @@
 
 # Cher CRM — Real‑Estate Lead Management (FastAPI + React + Docker)
 
+**Frontend (Vercel)** → https://crm-application-flame.vercel.app  
+**Backend (Render)** → https://crm-application-ut0z.onrender.com
+
 A production‑ready, containerized **CRM for real‑estate** teams.  
 Backend is **FastAPI + SQLAlchemy + PostgreSQL**; frontend is **React + TypeScript (Vite)** with **Recharts** for visualizations.  
 Everything runs with **Docker Compose** (Nginx serves the SPA and proxies `/api` to the backend).
@@ -243,5 +246,10 @@ docker compose up -d --build
 
 ## 📜 License
 
-This project is for the FSD assignment and educational/demo purposes.  
-Feel free to adapt for your team’s workflows.
+Licensed under the MIT License. See LICENSE file for details.
+
+---
+## 🌐 Live Deployments
+
+- **Frontend (Vercel)** → [https://crm-application-flame.vercel.app](https://crm-application-flame.vercel.app)
+- **Backend (Render)** → [https://crm-application-ut0z.onrender.com](https://crm-application-ut0z.onrender.com)
