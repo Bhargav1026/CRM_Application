@@ -130,26 +130,26 @@ app.include_router(activities.router)
 app.include_router(dashboard.router)
 
 
-# --- One-time seeding endpoint (delete after use) ---
-@app.post("/seed-once", tags=["System"])
-def seed_once(token: str = Query(..., description="one-time seed token")):
-    """
-    Run database seeding once, protected by a one-off token.
-    IMPORTANT: Remove this endpoint and SEED_TOKEN env var after seeding.
-    """
-    expected = os.getenv("SEED_TOKEN")
-    if not expected or token != expected:
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-    if seed_script is None or not hasattr(seed_script, "seed"):
-        raise HTTPException(status_code=500, detail="Seed module not available")
-
-    try:
-        result = seed_script.seed()
-        return {"status": "ok", "result": result if result is not None else "done"}
-    except Exception as e:
-        logger.exception("Seeding failed")
-        raise HTTPException(status_code=500, detail=str(e))
+# Disabled after initial seeding for production security
+# @app.post("/seed-once", tags=["System"])
+# def seed_once(token: str = Query(..., description="one-time seed token")):
+#     """
+#     Run database seeding once, protected by a one-off token.
+#     IMPORTANT: Remove this endpoint and SEED_TOKEN env var after seeding.
+#     """
+#     expected = os.getenv("SEED_TOKEN")
+#     if not expected or token != expected:
+#         raise HTTPException(status_code=403, detail="Forbidden")
+#
+#     if seed_script is None or not hasattr(seed_script, "seed"):
+#         raise HTTPException(status_code=500, detail="Seed module not available")
+#
+#     try:
+#         result = seed_script.seed()
+#         return {"status": "ok", "result": result if result is not None else "done"}
+#     except Exception as e:
+#         logger.exception("Seeding failed")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 # --- Health & Metadata Endpoints ---
 @app.get("/health", tags=["System"])
