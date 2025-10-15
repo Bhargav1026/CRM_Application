@@ -1,5 +1,5 @@
 {
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://crm-application-ut0z.onrender.com/$1" }
+    { "source": "/api/:path*", "destination": "https://crm-application-ut0z.onrender.com/:path*" }
   ]
 }
