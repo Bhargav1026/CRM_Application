@@ -55,6 +55,20 @@ export default function Leads() {
     return () => window.removeEventListener("resize", update);
   }, []);
 
+  // track dark mode via body[data-theme="dark"]
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    return document.body?.getAttribute("data-theme") === "dark";
+  });
+  useEffect(() => {
+    const update = () => setIsDark(document.body?.getAttribute("data-theme") === "dark");
+    // run once
+    update();
+    // watch attribute changes (theme toggle)
+    const obs = new MutationObserver(update);
+    obs.observe(document.body, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
+
   const navigate = useNavigate();
   const goDashboard = () => navigate("/dashboard");
 
@@ -258,7 +272,15 @@ export default function Leads() {
   };
 
   return (
-    <div className="page" style={{ overflowX: "hidden", width: "100%" }}>
+    <div
+      className="page"
+      style={{
+        overflowX: "hidden",
+        width: "100%",
+        color: isDark ? "#e5e7eb" : "#0b1220",
+        background: "transparent"
+      }}
+    >
       <div style={{ maxWidth: "1200px", margin: "24px auto 0", padding: "0 16px" }}>
         <div
           className="row"
@@ -336,7 +358,9 @@ export default function Leads() {
               padding: 14,
               marginBottom: 16,
               maxWidth: "100%",
-              background: "var(--surface-1, #0f1115)",
+              background: isDark ? "#0f1115" : "#ffffff",
+              color: isDark ? "#e5e7eb" : "#0b1220",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`
             }}
           >
             <div style={{ gridColumn: "1 / -1", fontWeight: 600 }}>
@@ -471,35 +495,41 @@ export default function Leads() {
                 className="card lead-card"
                 onClick={() => navigate(`/leads/${l.id}`)}
                 style={{
-                  padding: 14,
+                  padding: 16,
                   borderRadius: 12,
-                  background: "var(--surface-2, #16181d)",
-                  border: "1px solid var(--surface-3, #23262b)",
+                  background: isDark ? "#0f1115" : "#ffffff",
+                  color: isDark ? "#e5e7eb" : "#0b1220",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  boxShadow: isDark ? "0 1px 2px rgba(0,0,0,0.6)" : "0 1px 2px rgba(0,0,0,0.06)",
                   display: "grid",
                   gridTemplateColumns: "1fr auto",
-                  rowGap: 6,
-                  columnGap: 10,
+                  rowGap: 8,
+                  columnGap: 12,
                   alignItems: "center",
                   width: "100%",
                   maxWidth: "100%",
                   boxSizing: "border-box",
-                  overflow: "hidden",
+                  overflow: "hidden"
                 }}
               >
                 <div style={{ gridColumn: "1 / -1", fontWeight: 600, fontSize: 16 }}>
                   {l.first_name} {l.last_name}
                 </div>
-                <div style={{ opacity: 0.9 }}>
-                  <div style={{ fontSize: 13 }}>Email</div>
-                  <div style={{ fontSize: 14, overflowWrap: "anywhere", wordBreak: "break-word" }}>{(l as any).email || "-"}</div>
+                <div style={{ opacity: 1 }}>
+                  <div style={{ fontSize: 13, color: isDark ? "#9ca3af" : "#6b7280" }}>Email</div>
+                  <div style={{ fontSize: 14, color: isDark ? "#e5e7eb" : "#111827", overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                    {(l as any).email || "-"}
+                  </div>
                 </div>
-                <div style={{ opacity: 0.9 }}>
-                  <div style={{ fontSize: 13 }}>Phone</div>
-                  <div style={{ fontSize: 14 }}>{(l as any).phone || "-"}</div>
+                <div style={{ opacity: 1 }}>
+                  <div style={{ fontSize: 13, color: isDark ? "#9ca3af" : "#6b7280" }}>Phone</div>
+                  <div style={{ fontSize: 14, color: isDark ? "#e5e7eb" : "#111827" }}>{(l as any).phone || "-"}</div>
                 </div>
-                <div style={{ opacity: 0.9 }}>
-                  <div style={{ fontSize: 13 }}>Owner</div>
-                  <div style={{ fontSize: 14 }}>{(l as any).owner_name || (l as any).assigned_to || "-"}</div>
+                <div style={{ opacity: 1 }}>
+                  <div style={{ fontSize: 13, color: isDark ? "#9ca3af" : "#6b7280" }}>Owner</div>
+                  <div style={{ fontSize: 14, color: isDark ? "#e5e7eb" : "#111827" }}>
+                    {(l as any).owner_name || (l as any).assigned_to || "-"}
+                  </div>
                 </div>
                 <div style={{ gridColumn: "1 / 2", marginTop: 6 }}>
                   <span
@@ -512,13 +542,13 @@ export default function Leads() {
                       padding: '4px 10px',
                       fontWeight: 600,
                       textTransform: 'capitalize',
-                      fontSize: 12,
+                      fontSize: 11,
                     }}
                   >
                     {l.status}
                   </span>
                 </div>
-                <div style={{ justifySelf: "end", display: "flex", gap: 8 }}>
+                <div style={{ justifySelf: "end", display: "flex", gap: 6 }}>
                   <button
                     className="btn"
                     aria-label={`Edit ${l.first_name} ${l.last_name}`}
@@ -587,9 +617,11 @@ export default function Leads() {
             className="table-wrap"
             style={{
               overflowX: "auto",
-              background: "var(--surface-1, #0f1115)",
+              background: isDark ? "#0f1115" : "#ffffff",
+              color: isDark ? "#e5e7eb" : "#0b1220",
               borderRadius: 12,
-              padding: 12
+              padding: 12,
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`
             }}
           >
             <table style={{ width: "100%" }}>
@@ -608,9 +640,12 @@ export default function Leads() {
                 {leads.map((l) => (
                   <tr
                     key={l.id}
-                    style={{ borderTop: "1px solid #2b2b2b", cursor: "pointer" }}
+                    style={{
+                      borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                      cursor: "pointer"
+                    }}
                     onClick={() => navigate(`/leads/${l.id}`)}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.03)")}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     title="Open lead details"
                   >
@@ -668,7 +703,7 @@ export default function Leads() {
                 {loading && leads.length === 0 && (
                   <>
                     {[0,1,2,3,4].map((i) => (
-                      <tr key={`sk-${i}`} style={{ borderTop: "1px solid #2b2b2b" }}>
+                      <tr key={`sk-${i}`} style={{ borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}` }}>
                         <td><Skeleton width={140} height={16} /></td>
                         <td><Skeleton width={180} height={16} /></td>
                         <td><Skeleton width={120} height={16} /></td>
