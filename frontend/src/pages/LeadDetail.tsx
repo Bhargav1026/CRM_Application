@@ -133,10 +133,12 @@ export default function LeadDetail() {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<ActivityForm>({
+  const { register, handleSubmit, reset, watch, formState: { isSubmitting, errors } } = useForm<ActivityForm>({
     defaultValues: { activity_type: "call", title: "", notes: "", duration: undefined, activity_date: today },
     mode: "onSubmit",
   });
+
+  const selectedType = watch("activity_type");
 
   const {
     register: regLead,
@@ -497,16 +499,34 @@ export default function LeadDetail() {
         <section style={fullWidthCard}>
           <h3 style={{ marginTop: 0 }}>Add Activity</h3>
           <form onSubmit={handleSubmit(onAddActivity)} style={{ display: "grid", gap: 10, maxWidth: 520 }}>
-            <select {...register("activity_type", { required: true })} style={inputStyle}>
+            <select {...register("activity_type", { required: "Please select an activity type" })} style={inputStyle}>
               <option value="call">call</option>
               <option value="meeting">meeting</option>
               <option value="email">email</option>
               <option value="note">note</option>
             </select>
-            <input type="date" {...register("activity_date", { required: true })} style={inputStyle} />
-            <input placeholder="Title" {...register("title", { required: true })} style={inputStyle} />
+            {errors.activity_type && <small style={{ color: "salmon" }}>{errors.activity_type.message as string}</small>}
+            <input type="date" {...register("activity_date", { required: "Activity date is required" })} style={inputStyle} />
+            {errors.activity_date && <small style={{ color: "salmon" }}>{errors.activity_date.message as string}</small>}
+            <input placeholder="Title" {...register("title", { required: "Title is required" })} style={inputStyle} />
+            {errors.title && <small style={{ color: "salmon" }}>{errors.title.message as string}</small>}
             <textarea placeholder="Notes" {...register("notes")} style={{ ...inputStyle, minHeight: 80 }} />
-            <input type="number" placeholder="Duration (min)" {...register("duration", { valueAsNumber: true })} style={inputStyle} />
+            <input
+              type="number"
+              placeholder="Duration (min)"
+              {...register("duration", {
+                valueAsNumber: true,
+                validate: (v) => {
+                  if (selectedType === "call") {
+                    if (v === undefined || v === null || Number.isNaN(v)) return "Duration is required for calls";
+                    if (typeof v !== "number" || v <= 0) return "Duration must be a positive number";
+                  }
+                  return true;
+                },
+              })}
+              style={inputStyle}
+            />
+            {errors.duration && <small style={{ color: "salmon" }}>{errors.duration.message as string}</small>}
             <div>
               <button type="submit" disabled={isSubmitting} style={primaryBtn}>
                 {isSubmitting ? "Adding…" : "Add Activity"}

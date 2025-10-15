@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import api from "../api/axios";
 import type { Lead } from "../types";
+import Skeleton from "../components/Skeleton";
 
 type LeadPage = { items: Lead[]; total: number; page: number; size: number };
 
@@ -105,7 +106,7 @@ export default function Leads() {
       if (minBudget.trim()) params.min_budget = String(parseInt(minBudget, 10));
       if (maxBudget.trim()) params.max_budget = String(parseInt(maxBudget, 10));
       params.page = String(page);
-      params.per_page = String(size);
+      params.page_size = String(size);
 
       const res = await api.get<LeadPage>("/leads", { params });
       setLeads(res.data.items || []);
@@ -190,6 +191,29 @@ export default function Leads() {
       setDeleteErr(e?.response?.data?.detail || "Failed to delete lead");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const exportCsv = async () => {
+    try {
+      const params: Record<string, string> = {};
+      if (q.trim()) params.q = q.trim();
+      if (status) params.status = status;
+      if (source.trim()) params.source = source.trim();
+      if (minBudget.trim()) params.min_budget = String(parseInt(minBudget, 10));
+      if (maxBudget.trim()) params.max_budget = String(parseInt(maxBudget, 10));
+      const res = await api.get("/leads/export.csv", { params, responseType: "blob" });
+      const blob = new Blob([res.data], { type: "text/csv;charset=utf-8;" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "leads.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail || "Failed to export CSV");
     }
   };
 
@@ -382,6 +406,14 @@ export default function Leads() {
           >
             Reset
           </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={exportCsv}
+            aria-label="Export CSV"
+          >
+            Export CSV
+          </button>
         </form>
 
         {err && (
@@ -475,7 +507,35 @@ export default function Leads() {
             ))}
 
             {loading && leads.length === 0 && (
-              <div className="card" style={{ padding: 12 }}>Loading…</div>
+              <>
+                <div className="card" style={{ padding: 14 }}>
+                  <Skeleton width={180} height={18} />
+                  <div style={{ marginTop: 10 }}><Skeleton height={22} /></div>
+                  <div style={{ marginTop: 6, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                    <Skeleton height={16} />
+                    <Skeleton height={16} />
+                    <Skeleton height={16} />
+                  </div>
+                </div>
+                <div className="card" style={{ padding: 14 }}>
+                  <Skeleton width={180} height={18} />
+                  <div style={{ marginTop: 10 }}><Skeleton height={22} /></div>
+                  <div style={{ marginTop: 6, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                    <Skeleton height={16} />
+                    <Skeleton height={16} />
+                    <Skeleton height={16} />
+                  </div>
+                </div>
+                <div className="card" style={{ padding: 14 }}>
+                  <Skeleton width={180} height={18} />
+                  <div style={{ marginTop: 10 }}><Skeleton height={22} /></div>
+                  <div style={{ marginTop: 6, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                    <Skeleton height={16} />
+                    <Skeleton height={16} />
+                    <Skeleton height={16} />
+                  </div>
+                </div>
+              </>
             )}
             {leads.length === 0 && !loading && (
               <div className="card" style={{ padding: 12 }}>No leads match your filters.</div>
@@ -566,9 +626,19 @@ export default function Leads() {
                   </tr>
                 ))}
                 {loading && leads.length === 0 && (
-                  <tr>
-                    <td colSpan={7}>Loading…</td>
-                  </tr>
+                  <>
+                    {[0,1,2,3,4].map((i) => (
+                      <tr key={`sk-${i}`} style={{ borderTop: "1px solid #2b2b2b" }}>
+                        <td><Skeleton width={140} height={16} /></td>
+                        <td><Skeleton width={180} height={16} /></td>
+                        <td><Skeleton width={120} height={16} /></td>
+                        <td><Skeleton width={80} height={16} /></td>
+                        <td><Skeleton width={100} height={16} /></td>
+                        <td><Skeleton width={120} height={16} /></td>
+                        <td><Skeleton width={100} height={28} /></td>
+                      </tr>
+                    ))}
+                  </>
                 )}
                 {leads.length === 0 && !loading && (
                   <tr>

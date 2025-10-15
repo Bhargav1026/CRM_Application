@@ -1,10 +1,95 @@
 services:
   db:
-    image: postgres:16
+    image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: crm_db
+      TZ: UTC
+    volumes:
+      - crm_application_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - ./backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
-      - "5432:5432"
+      - "8000:8000"
+    command:
+      - gunicorn
+      - -k
+      - uvicorn.workers.UvicornWorker
+      - app.main:app
+      - -w
+      - "${GUNICORN_WORKERS:-2}"
+      - --threads
+      - "${GUNICORN_THREADS:-4}"
+      - --timeout
+      - "60"
+      - --graceful-timeout
+      - "30"
+      - --keep-alive
+      - "5"
+      - --access-logfile
+      - "-"
+      - --error-logfile
+      - "-"
+      - -b
+      - 0.0.0.0:8000
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=2).getcode()==200 else 1)\""]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        # this is used at build time by Vite to bake API URL
+        VITE_API_BASE: "http://localhost:8000"
+    env_file:
+      - ./frontend/.env
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "5173:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  crm_application_pg_data:

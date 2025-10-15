@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Index, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
@@ -21,6 +21,14 @@ class User(Base):
 
 class Lead(Base):
     __tablename__ = "leads"
+    __table_args__ = (
+        Index(
+            "ix_leads_active_status_created",
+            "is_active",
+            "status",
+            "created_at",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     first_name = Column(String(100), nullable=False)
@@ -38,10 +46,10 @@ class Lead(Base):
     assigned_to = Column(String(255))
     notes = Column(Text)
 
-    is_active = Column(Boolean, default=True)
+    is_active = Column(Boolean, nullable=False, server_default=text("true"), index=True)
     user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     activities = relationship("Activity", back_populates="lead", cascade="all, delete-orphan")
     owner = relationship("User", back_populates="leads")
@@ -58,8 +66,8 @@ class Activity(Base):
     title = Column(String(200))
     notes = Column(Text)
     duration = Column(Integer)  # minutes (optional)
-    activity_date = Column(DateTime(timezone=True), server_default=func.now())
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    activity_date = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     lead = relationship("Lead", back_populates="activities")
     user = relationship("User", back_populates="activities")

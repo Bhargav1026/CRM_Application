@@ -1,9 +1,10 @@
 import axios from "axios";
 
-// Create axios instance with base URL from environment
+// Create axios instance with base URL set to '/api' for Nginx proxy
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE || "http://localhost:8000",
+  baseURL: "/api",
   timeout: 15000,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
@@ -36,3 +37,4 @@ api.interceptors.response.use(
 
 export default api;
 export const API_BASE_URL = api.defaults.baseURL as string;
+console.debug("[axios] baseURL:", API_BASE_URL);

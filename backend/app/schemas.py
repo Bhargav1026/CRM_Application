@@ -1,6 +1,8 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime
+
+from pydantic import field_validator, model_validator
 
 # ---- Users ----
 class UserBase(BaseModel):
@@ -74,6 +76,8 @@ class LeadOut(LeadBase):
     is_active: bool
     # NEW: Helpful for admin dashboards & audits
     owner_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -92,7 +96,7 @@ class LeadPagination(BaseModel):
 
 # ---- Activities ----
 class ActivityBase(BaseModel):
-    activity_type: str  # "call" | "meeting" | "note" | "email"
+    activity_type: Literal["call", "email", "meeting", "note"]
     title: Optional[str] = None
     notes: Optional[str] = None
     duration: Optional[int] = None  # minutes
@@ -100,7 +104,13 @@ class ActivityBase(BaseModel):
 
 
 class ActivityCreate(ActivityBase):
-    pass
+    @model_validator(mode="after")
+    def validate_call_duration(self):
+        # For calls, duration must be provided and > 0
+        if self.activity_type == "call":
+            if self.duration is None or not isinstance(self.duration, int) or self.duration <= 0:
+                raise ValueError("duration must be a positive integer for call activities")
+        return self
 
 
 class ActivityOut(ActivityBase):
@@ -108,6 +118,7 @@ class ActivityOut(ActivityBase):
     lead_id: int
     user_id: Optional[int] = None
     activity_date: Optional[datetime] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

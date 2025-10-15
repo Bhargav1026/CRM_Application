@@ -20,6 +20,11 @@ def dashboard(db: Session = Depends(get_db), user=Depends(get_current_user)):
     is_admin = bool(getattr(user, "is_admin", False))
     now = datetime.now(timezone.utc)
 
+    # Week starts Monday 00:00 (ISO week)
+    week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    # Month starts on the 1st 00:00
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
     # ---------- Base lead scope (active only) ----------
     lead_q = db.query(models.Lead).filter(models.Lead.is_active.is_(True))
     if not is_admin:
@@ -27,6 +32,12 @@ def dashboard(db: Session = Depends(get_db), user=Depends(get_current_user)):
 
     # ---------- Totals ----------
     total_leads = lead_q.count()
+
+    # total activities (scoped)
+    act_total_q = db.query(models.Activity).join(models.Lead, models.Activity.lead_id == models.Lead.id)
+    if not is_admin:
+        act_total_q = act_total_q.filter(models.Lead.user_id == user.id)
+    total_activities = act_total_q.count()
 
     # by_status
     status_rows = (
@@ -75,6 +86,18 @@ def dashboard(db: Session = Depends(get_db), user=Depends(get_current_user)):
         .scalar()
     )
 
+    # New leads this week (from week_start)
+    new_leads_this_week = (
+        lead_q.session.query(func.count(models.Lead.id))
+        .select_from(models.Lead)
+        .filter(
+            models.Lead.is_active.is_(True),
+            models.Lead.created_at >= week_start,
+            *( [] if is_admin else [models.Lead.user_id == user.id] )
+        )
+        .scalar()
+    )
+
     new_leads_30d = (
         lead_q.session.query(func.count(models.Lead.id))
         .select_from(models.Lead)
@@ -111,6 +134,19 @@ def dashboard(db: Session = Depends(get_db), user=Depends(get_current_user)):
     )
     denom = won_30d + lost_30d
     win_rate_30d = (won_30d / denom) if denom else 0.0
+
+    # Closed leads this month ("won" updated in current month)
+    closed_leads_this_month = (
+        lead_q.session.query(func.count(models.Lead.id))
+        .select_from(models.Lead)
+        .filter(
+            models.Lead.is_active.is_(True),
+            models.Lead.status == "won",
+            models.Lead.updated_at >= month_start,
+            *( [] if is_admin else [models.Lead.user_id == user.id] )
+        )
+        .scalar()
+    )
 
     # ---------- Activities ----------
     act_q = db.query(models.Activity).join(models.Lead, models.Activity.lead_id == models.Lead.id)
@@ -193,6 +229,7 @@ def dashboard(db: Session = Depends(get_db), user=Depends(get_current_user)):
     return {
         # --- Backward compatible keys ---
         "total_leads": total_leads,
+        "total_activities": int(total_activities or 0),
         "leads_by_status": leads_by_status,
         "recent_activities": [
             {"id": a.id, "lead_id": a.lead_id, "type": a.activity_type, "title": a.title, "at": a.activity_date}
@@ -201,10 +238,12 @@ def dashboard(db: Session = Depends(get_db), user=Depends(get_current_user)):
         # --- New richer metrics ---
         "leads_by_source": leads_by_source,
         "new_leads_today": int(new_leads_today or 0),
+        "new_leads_this_week": int(new_leads_this_week or 0),
         "new_leads_7d": int(new_leads_7d or 0),
         "new_leads_30d": int(new_leads_30d or 0),
         "won_30d": int(won_30d or 0),
         "lost_30d": int(lost_30d or 0),
+        "closed_leads_this_month": int(closed_leads_this_month or 0),
         "win_rate_30d": win_rate_30d,
         "activities_by_type_30d": activities_by_type_30d,
         "avg_activities_per_lead_30d": avg_activities_per_lead_30d,

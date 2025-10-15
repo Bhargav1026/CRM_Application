@@ -14,7 +14,7 @@ oauth2 = OAuth2PasswordBearer(tokenUrl="/users/login")
 def register(user: UserCreate, db: Session = Depends(get_db)):
     exists = db.query(models.User).filter(models.User.email == user.email).first()
     if exists:
-        raise HTTPException(400, "Email already registered")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
     db_user = models.User(
         email=user.email,
         password_hash=hash_password(user.password),
@@ -34,20 +34,24 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
     if not user or not verify_password(form.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     token = create_access_token(sub=user.id, is_admin=user.is_admin)
-    return {"access_token": token, "token_type": "bearer"}
+    from ..auth import ACCESS_MIN
+    return {"access_token": token, "token_type": "bearer", "expires_in_minutes": ACCESS_MIN}
 
 # -------- Current user --------
 def get_current_user(token: str = Depends(oauth2), db: Session = Depends(get_db)) -> models.User:
     try:
         payload = decode_token(token)
         uid = int(payload.get("sub"))
+        if not payload.get("type") == "access":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
     except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
     user = db.get(models.User, uid)
     if not user:
         raise HTTPException(401, "User not found")
     return user
 
+# Requires Authorization: Bearer <token>
 @router.get("/me", response_model=UserOut)
 def me(current_user: models.User = Depends(get_current_user)):
     return current_user

@@ -9,10 +9,14 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import Skeleton from "../components/Skeleton";
 
 type DashboardData = {
   total_leads: number;
-  leads_by_status: Record<string, number>;
+  total_activities?: number;
+  new_leads_this_week?: number;
+  closed_leads_this_month?: number;
+  leads_by_status: Record<string, number> | Array<{ status?: string; name?: string; count?: number; value?: number }>;
   recent_activities: Array<{
     id: number;
     lead_id: number;
@@ -138,15 +142,117 @@ export default function Dashboard() {
 
   if (err) return <div style={{ padding: 24, color: "salmon" }}>{err}</div>;
   if (!data) return (
-    <div style={{ display:"grid", placeItems:"center", minHeight:"60vh" }}>
-      <div style={{ opacity: 0.8 }}>Loading…</div>
-    </div>
+    <>
+      <style>{fadeIn + dashboardCSS}</style>
+      <div className="pageWrap">
+        <div className="centerWrap">
+          <div className="containerWrap">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
+              <Skeleton width={220} height={38} />
+            </div>
+
+            {/* KPI Row (skeleton) */}
+            <div className="kpiGrid">
+              <div style={{ borderRadius: 14, border: "1px solid var(--card-border)", background: "var(--card-bg)", boxShadow: "var(--shadow)", padding: 24, width: "100%", maxWidth: 360 }}>
+                <div style={{ display: "grid", gap: 10 }}>
+                  <div>
+                    <Skeleton width={120} height={16} />
+                    <div style={{ marginTop: 8 }}><Skeleton width={160} height={48} /></div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+                    <Skeleton height={28} />
+                    <Skeleton height={28} />
+                    <Skeleton height={28} />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ borderRadius: 14, border: "1px solid var(--card-border)", background: "var(--card-bg)", boxShadow: "var(--shadow)", padding: 24, minHeight: 460, width: "100%", maxWidth: 720 }}>
+                <Skeleton width={180} height={18} />
+                <div style={{ marginTop: 16 }}>
+                  <Skeleton height={380} />
+                </div>
+              </div>
+            </div>
+
+            {/* Metrics Row 2 (skeleton) */}
+            <div className="grid2">
+              <div style={{ borderRadius: 14, border: "1px solid var(--card-border)", background: "var(--card-bg)", boxShadow: "var(--shadow)", padding: 24 }}>
+                <Skeleton width={180} height={18} />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginTop: 12 }}>
+                  <Skeleton height={42} />
+                  <Skeleton height={42} />
+                  <Skeleton height={42} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginTop: 12 }}>
+                  <Skeleton height={38} />
+                  <Skeleton height={38} />
+                  <Skeleton height={38} />
+                </div>
+                <div style={{ marginTop: 12 }}><Skeleton width={220} height={18} /></div>
+              </div>
+
+              <div style={{ borderRadius: 14, border: "1px solid var(--card-border)", background: "var(--card-bg)", boxShadow: "var(--shadow)", padding: 24 }}>
+                <Skeleton width={160} height={18} />
+                <div style={{ marginTop: 12 }}><Skeleton height={260} /></div>
+              </div>
+
+              <div style={{ borderRadius: 14, border: "1px solid var(--card-border)", background: "var(--card-bg)", boxShadow: "var(--shadow)", padding: 24 }}>
+                <Skeleton width={160} height={18} />
+                <div style={{ marginTop: 12 }}><Skeleton height={260} /></div>
+              </div>
+            </div>
+
+            {/* Trend + recent leads (skeleton) */}
+            <div className="grid2" style={{ marginTop: 8 }}>
+              <div style={{ borderRadius: 14, border: "1px solid var(--card-border)", background: "var(--card-bg)", boxShadow: "var(--shadow)", padding: 24 }}>
+                <Skeleton width={200} height={18} />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginTop: 12 }}>
+                  <Skeleton height={68} />
+                  <Skeleton height={68} />
+                  <Skeleton height={68} />
+                  <Skeleton height={68} />
+                </div>
+              </div>
+
+              <div style={{ borderRadius: 14, border: "1px solid var(--card-border)", background: "var(--card-bg)", boxShadow: "var(--shadow)", padding: 24, gridColumn: "span 2" }}>
+                <Skeleton width={160} height={18} />
+                <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+                  <Skeleton height={56} />
+                  <Skeleton height={56} />
+                  <Skeleton height={56} />
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Activities (skeleton) */}
+            <section style={{ borderRadius: 14, border: "1px solid var(--card-border)", background: "var(--card-bg)", boxShadow: "var(--shadow)", padding: 24, width: "100%", maxWidth: 1100, margin: "0 auto" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <Skeleton width={160} height={18} />
+                <Skeleton width={100} height={16} />
+              </div>
+              <div style={{ display: "grid", gap: 12 }}>
+                <Skeleton height={62} />
+                <Skeleton height={62} />
+                <Skeleton height={62} />
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </>
   );
 
-  const pieData = Object.entries(data.leads_by_status || {}).map(([name, value]) => ({
-    name,
-    value,
-  }));
+  let pieData: Array<{ name: string; value: number }> = [];
+  const lbs: any = data.leads_by_status || {};
+  if (Array.isArray(lbs)) {
+    pieData = lbs.map((x: any) => ({
+      name: (x.status ?? x.name ?? "unknown").toString(),
+      value: Number(x.count ?? x.value ?? 0),
+    }));
+  } else {
+    pieData = Object.entries(lbs).map(([name, value]) => ({ name, value: Number(value as any) }));
+  }
   const COLORS = ["#8b5cf6", "#22c55e", "#60a5fa", "#f59e0b", "#ef4444", "#14b8a6"]; // purple/green/blue/orange/red/teal
 
   const srcData = Object.entries(data.leads_by_source || {}).map(([name, value]) => ({ name, value }));
@@ -199,8 +305,26 @@ export default function Dashboard() {
                 (e.currentTarget as HTMLDivElement).style.boxShadow = "var(--shadow)";
               }}
             >
-              <div style={{ opacity: 0.8 }}>Total Leads</div>
-              <div style={{ fontSize: 48, fontWeight: 800, marginTop: 4, textShadow: "0 0 10px #a78bfa", color: "var(--text)" }}>{data.total_leads}</div>
+              <div style={{ display:"grid", gap: 10 }}>
+                <div>
+                  <div style={{ opacity: 0.8 }}>Total Leads</div>
+                  <div style={{ fontSize: 48, fontWeight: 800, marginTop: 4, textShadow: "0 0 10px #a78bfa", color: "var(--text)" }}>{data.total_leads}</div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap: 12 }}>
+                  <div>
+                    <div style={{ opacity: 0.8, fontSize: 12 }}>Total Activities</div>
+                    <div style={{ fontSize: 22, fontWeight: 700 }}>{data.total_activities ?? 0}</div>
+                  </div>
+                  <div>
+                    <div style={{ opacity: 0.8, fontSize: 12 }}>New This Week</div>
+                    <div style={{ fontSize: 22, fontWeight: 700 }}>{data.new_leads_this_week ?? 0}</div>
+                  </div>
+                  <div>
+                    <div style={{ opacity: 0.8, fontSize: 12 }}>Closed This Month</div>
+                    <div style={{ fontSize: 22, fontWeight: 700 }}>{data.closed_leads_this_month ?? 0}</div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div
@@ -221,7 +345,7 @@ export default function Dashboard() {
                     <PieChart margin={{ top: 8, right: 8, bottom: 40, left: 8 }}>
                       <Pie data={pieData} dataKey="value" nameKey="name" outerRadius={140} label>
                         {pieData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          <Cell key={`cell-${index}-${entry.name}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
                       <Tooltip
@@ -297,7 +421,7 @@ export default function Dashboard() {
                     <PieChart>
                       <Pie data={srcData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={90}>
                         {srcData.map((entry, index) => (
-                          <Cell key={`src-${index}`} fill={COLORS[index % COLORS.length]} />
+                          <Cell key={`src-${index}-${entry.name}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
                       <Tooltip contentStyle={{ background: "var(--card-bg)", border: "1px solid var(--card-border)", color: "var(--text)" }} />
@@ -323,7 +447,7 @@ export default function Dashboard() {
                     <PieChart>
                       <Pie data={actTypeData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={90}>
                         {actTypeData.map((entry, index) => (
-                          <Cell key={`act-${index}`} fill={COLORS[index % COLORS.length]} />
+                          <Cell key={`act-${index}-${entry.name}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
                       <Tooltip contentStyle={{ background: "var(--card-bg)", border: "1px solid var(--card-border)", color: "var(--text)" }} />

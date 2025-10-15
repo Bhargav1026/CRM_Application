@@ -1,5 +1,5 @@
 import React, { type ReactElement, createContext, useContext, useEffect, useMemo, useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import LeadDetail from "./pages/LeadDetail";
 import Nav from "./components/Nav";
 import { Toaster } from "react-hot-toast";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 /** -------------------------------
  *  Theme context (light / dark)
@@ -100,6 +101,23 @@ function Public({ children }: { children: React.ReactNode }) {
 }
 
 /** -------------------------------
+ *  Logout route (clears token/state)
+ *  ------------------------------- */
+function Logout() {
+  const nav = useNavigate();
+  useEffect(() => {
+    try {
+      localStorage.removeItem("token");
+      // optional: also clear any cached user info
+      localStorage.removeItem("user");
+    } catch {}
+    // small delay to ensure state updates propagate
+    setTimeout(() => nav("/login", { replace: true }), 0);
+  }, [nav]);
+  return null;
+}
+
+/** -------------------------------
  *  App routes
  *  ------------------------------- */
 export default function App() {
@@ -111,10 +129,11 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<Public><Login /></Public>} />
             <Route path="/register" element={<Public><Register /></Public>} />
-            <Route path="/" element={<Protected><Leads /></Protected>} />
-            <Route path="/leads" element={<Protected><Leads /></Protected>} />
-            <Route path="/leads/:id" element={<Protected><LeadDetail /></Protected>} />
-            <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+            <Route path="/" element={<ProtectedRoute><Protected><Leads /></Protected></ProtectedRoute>} />
+            <Route path="/leads" element={<ProtectedRoute><Protected><Leads /></Protected></ProtectedRoute>} />
+            <Route path="/leads/:id" element={<ProtectedRoute><Protected><LeadDetail /></Protected></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute><Protected><Dashboard /></Protected></ProtectedRoute>} />
+          <Route path="/logout" element={<Logout />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AuthProvider>
