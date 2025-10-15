@@ -10,10 +10,24 @@ from .auth import hash_password
 from .routers import users, leads, activities, dashboard
 
 # Optional seed script (used for a one-time seeding endpoint)
+# We support two possible locations:
+#  1) backend/app/scripts/seed.py        -> import .scripts.seed
+#  2) backend/scripts/seed.py            -> add project root to sys.path then import scripts.seed
+seed_script = None
 try:
-    from .scripts import seed as seed_script  # backend/app/scripts/seed.py
+    # Case 1: scripts is a subpackage of app
+    from .scripts import seed as seed_script  # type: ignore
 except Exception:
-    seed_script = None
+    # Case 2: scripts directory is at project root (sibling of "app")
+    try:
+        import os
+        import sys
+        _root = os.path.dirname(os.path.dirname(__file__))  # /app (repo backend root in the container)
+        if _root not in sys.path:
+            sys.path.append(_root)
+        from scripts import seed as seed_script  # type: ignore
+    except Exception:
+        seed_script = None
 
 # --- Logging setup ---
 logging.basicConfig(
