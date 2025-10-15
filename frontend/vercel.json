@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://crm-application-ut0z.onrender.com/:path*"
+    }
+  ]
+}
