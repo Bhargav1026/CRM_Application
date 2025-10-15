@@ -3,7 +3,7 @@ import axios from "axios";
 // Create axios instance with base URL set to '/api' for Nginx proxy
 const api = axios.create({
   baseURL: "/api",
-  timeout: 15000,
+  timeout: 60000,
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
