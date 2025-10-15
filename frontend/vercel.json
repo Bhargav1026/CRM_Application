@@ -1,5 +1,12 @@
 {
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://crm-application-ut0z.onrender.com/:path*" }
+    {
+      "source": "/api/:path*",
+      "destination": "https://crm-application-ut0z.onrender.com/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
